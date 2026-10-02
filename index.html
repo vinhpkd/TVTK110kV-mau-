@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TVTK 110kV NPSC - Hệ thống Quản lý Dự án & Trợ lý Chat AI</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (XLSX Parser) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Local Stylesheet -->
+    <link rel="stylesheet" href="index.css">
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fa-solid fa-bolt logo-icon"></i>
+                    <span class="logo-text" style="font-size: 1.1rem; font-weight: 800; letter-spacing: -0.5px;">TVTK 110kV <span style="color: var(--primary-color);">NPSC</span></span>
+                </div>
+                <div id="sync-status" class="status-badge status-offline">
+                    <span class="dot"></span>
+                    <span class="text">Đang tải dữ liệu...</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul>
+                    <li>
+                        <button class="nav-btn active" data-tab="dashboard">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <span>Bảng điều khiển</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn" data-tab="projects">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <span>Tìm kiếm dự án</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn" data-tab="alerts">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Cảnh báo chậm trễ</span>
+                            <span id="alert-count-badge" class="badge bg-rose" style="display:none;">0</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn" data-tab="revenue">
+                            <i class="fa-solid fa-money-bill-trend-up"></i>
+                            <span>Doanh thu & Tiến độ</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn" data-tab="weekly-report">
+                            <i class="fa-solid fa-file-invoice"></i>
+                            <span>Báo cáo tuần</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn" data-tab="ai-chat">
+                            <i class="fa-solid fa-comments-dollar"></i>
+                            <span>Trợ lý Chat AI</span>
+                            <span class="badge bg-cyan">Gemini</span>
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <button id="btn-open-settings" class="settings-btn">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Cấu hình API Key</span>
+                </button>
+                <div class="footer-version">Phiên bản 1.0.0 (Live Sync)</div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Top Bar -->
+            <header class="top-bar">
+                <div class="page-title-area">
+                    <h1 id="page-title">Bảng điều khiển</h1>
+                    <p id="page-subtitle">Tổng quan thông tin cơ cấu và tiến độ dự án lưới điện 110kV</p>
+                </div>
+                <div class="top-bar-actions">
+                    <div class="date-display">
+                        <i class="fa-regular fa-calendar-days"></i>
+                        <span id="current-date">--/--/----</span>
+                    </div>
+                    <button id="btn-theme-toggle" class="btn btn-secondary" title="Đổi phông nền Sáng / Tối">
+                        <i id="theme-toggle-icon" class="fa-solid fa-moon text-cyan"></i>
+                        <span id="theme-toggle-text">Giao diện tối</span>
+                    </button>
+                    <button id="btn-sync-now" class="btn btn-primary">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Đồng bộ Google Sheets</span>
+                    </button>
+                    <label for="excel-file-upload" class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 0; padding: 10px 16px; border-radius: var(--border-radius-md);">
+                        <i class="fa-solid fa-file-excel text-emerald"></i>
+                        <span>Nhập Excel (.xlsx)</span>
+                    </label>
+                    <input type="file" id="excel-file-upload" accept=".xlsx, .xls" style="display: none;">
+                </div>
+            </header>
+
+            <!-- Container for Tab contents -->
+            <div class="tab-content-container">
+                
+                <!-- Tab: Dashboard -->
+                <section id="tab-dashboard" class="tab-pane active">
+                    <!-- KPI Cards Row 1 -->
+                    <div class="kpi-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr;">
+                        <!-- Combined: Tổng DA đang thực hiện -->
+                        <div class="kpi-card combined-card" style="grid-column: span 1;">
+                            <div class="combined-card-inner">
+                                <div class="combined-left">
+                                    <div class="kpi-icon bg-blue-opacity" style="margin-bottom:8px;">
+                                        <i class="fa-solid fa-person-digging text-blue"></i>
+                                    </div>
+                                    <span class="kpi-label">Tổng DA đang thực hiện</span>
+                                    <h3 id="kpi-executing-unique" class="kpi-value" style="font-size:2.2rem;">--</h3>
+                                </div>
+                                <div class="combined-right">
+                                    <div class="combined-row">
+                                        <i class="fa-solid fa-circle-xmark text-rose" style="font-size:0.7rem;"></i>
+                                        <span class="combined-label">Chậm tiến độ</span>
+                                        <strong id="kpi-delayed-projects" class="text-rose">--</strong>
+                                    </div>
+                                    <div class="combined-row">
+                                        <i class="fa-solid fa-triangle-exclamation text-amber" style="font-size:0.7rem;"></i>
+                                        <span class="combined-label">Sắp chậm tiến độ</span>
+                                        <strong id="kpi-near-delayed" class="text-amber">--</strong>
+                                    </div>
+                                    <div class="combined-row">
+                                        <i class="fa-solid fa-circle-check text-emerald" style="font-size:0.7rem;"></i>
+                                        <span class="combined-label">Chưa đến hạn</span>
+                                        <strong id="kpi-not-due" class="text-emerald">--</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Tổng DA kế hoạch 2026 -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-blue-opacity">
+                                <i class="fa-solid fa-folder-tree text-blue"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Tổng DA kế hoạch 2026</span>
+                                <h3 id="kpi-total-projects" class="kpi-value">--</h3>
+                                <span class="kpi-trend text-blue"><span id="kpi-projects-transition">--</span> chuyển tiếp &bull; <span id="kpi-projects-new">--</span> mới</span>
+                            </div>
+                        </div>
+                        <!-- Tổng DA đã PD năm 2026 -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-violet-opacity">
+                                <i class="fa-solid fa-clipboard-check text-violet"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">DA đã phê duyệt 2026</span>
+                                <h3 id="kpi-approved-2026" class="kpi-value">--</h3>
+                                <span class="kpi-trend text-violet">Phê duyệt trong năm 2026</span>
+                            </div>
+                        </div>
+                        <!-- TMĐT -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-emerald-opacity">
+                                <i class="fa-solid fa-wallet text-emerald"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Tổng mức đầu tư (TMĐT)</span>
+                                <h3 id="kpi-total-investment" class="kpi-value">--</h3>
+                                <span class="kpi-trend text-emerald">Lũy kế toàn bộ dự án</span>
+                                <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08);">
+                                    <span class="kpi-label" style="font-size:0.7rem;">TMĐT đang thực hiện</span>
+                                    <h3 id="kpi-tmdt-executing" class="kpi-value" style="font-size:1.1rem; margin-top:2px;">--</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Doanh thu lũy kế -->
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-cyan-opacity">
+                                <i class="fa-solid fa-file-invoice-dollar text-cyan"></i>
+                            </div>
+                            <div class="kpi-info">
+                                <span class="kpi-label">Doanh thu thực tế lũy kế</span>
+                                <h3 id="kpi-revenue-2026" class="kpi-value">--</h3>
+                                <span class="kpi-trend text-cyan">KH năm: 86 tỷ &bull; Đạt <span id="kpi-revenue-percent">--</span>%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bảng TIẾN ĐỘ THỰC HIỆN DA KHỞI CÔNG ĐÓNG ĐIỆN 2026 -->
+                    <div class="data-card mt-4">
+                        <div class="card-header border-bottom">
+                            <h3><i class="fa-solid fa-helmet-safety text-amber"></i> TIẾN ĐỘ THỰC HIỆN DA KHỞI CÔNG ĐÓNG ĐIỆN 2026</h3>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table kcdd-table">
+                                <thead>
+                                    <tr>
+                                        <th style="min-width:200px;">Nội dung</th>
+                                        <th>Tổng số DA</th>
+                                        <th>Tổng số DA đã phê duyệt</th>
+                                        <th>DA đang thực hiện</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="kcdd-table-body">
+                                    <tr class="kcdd-total-row">
+                                        <td><strong>Tổng KC. ĐĐ 2026</strong></td>
+                                        <td id="kcdd-total-all"><strong>--</strong></td>
+                                        <td id="kcdd-total-pd"><strong>--</strong></td>
+                                        <td id="kcdd-total-dth"><strong>--</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Khởi công 2026</td>
+                                        <td id="kcdd-kc-all">--</td>
+                                        <td id="kcdd-kc-pd">--</td>
+                                        <td id="kcdd-kc-dth">--</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Đóng điện 2026</td>
+                                        <td id="kcdd-dd-all">--</td>
+                                        <td id="kcdd-dd-pd">--</td>
+                                        <td id="kcdd-dd-dth">--</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Khởi công + đóng điện 2026</td>
+                                        <td id="kcdd-kcdd-all">--</td>
+                                        <td id="kcdd-kcdd-pd">--</td>
+                                        <td id="kcdd-kcdd-dth">--</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="charts-grid" style="grid-template-columns: 1fr;">
+                        <div class="chart-card card-full">
+                            <div class="card-header">
+                                <h3>Tiến độ phê duyệt dự án đang thực hiện</h3>
+                                <p>Số lượng công trình theo tháng hạn phê duyệt QLA (Nhấp vào cột từng tháng để xem chi tiết dự án)</p>
+                            </div>
+                            <div class="chart-container-large" style="height: 350px;">
+                                <canvas id="chart-progress"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Month Projects Detail Card (hidden by default) -->
+                    <div id="chart-month-projects-container" class="data-card mt-4" style="display: none;"></div>
+
+                    <!-- Highlighted Projects Table -->
+                    <div class="data-card mt-4">
+                        <div class="card-header border-bottom" style="padding-bottom: 0;">
+                            <div class="header-with-action" style="align-items: flex-end;">
+                                <div class="header-tabs">
+                                    <button class="table-tab active" data-table="delay" id="tab-btn-delay">Dự án chậm tiến độ</button>
+                                    <button class="table-tab" data-table="milestone" id="tab-btn-milestone">Dự án khởi công/Đóng điện/Trọng điểm 2026</button>
+                                </div>
+                                <button class="btn btn-secondary btn-sm mb-2" id="btn-dashboard-view-all">
+                                    Xem tất cả dự án
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr id="dashboard-table-header">
+                                        <th>STT</th>
+                                        <th>Tên công trình</th>
+                                        <th>Giai đoạn</th>
+                                        <th>QLDA</th>
+                                        <th>Khu vực</th>
+                                        <th>Hiện trạng</th>
+                                        <th>Hạn phê duyệt QLA</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboard-projects-list">
+                                    <tr>
+                                        <td colspan="7" class="text-center">Đang tải dữ liệu...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Projects Search -->
+                <section id="tab-projects" class="tab-pane">
+                    <!-- Advanced Filter Panel -->
+                    <div class="filter-panel">
+                        <div class="filter-row-search" style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                            <div class="search-box-wrapper" style="flex: 1; margin: 0;">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="search-project-input" placeholder="Tìm kiếm theo tên dự án, số hợp đồng, đơn vị quản lý, cán bộ phụ trách...">
+                            </div>
+                            <button id="btn-search-project" class="btn btn-primary" style="padding: 10px 20px; display: flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; height: 42px;">
+                                <i class="fa-solid fa-magnifying-glass"></i> Tìm kiếm
+                            </button>
+                        </div>
+                        <div class="filter-row-selects">
+                            <!-- Filter: PMU -->
+                            <div class="filter-col">
+                                <label>Đơn vị quản lý (QLDA)</label>
+                                <div class="ms-container" id="ms-container-pmu">
+                                    <button type="button" class="ms-button" onclick="app.toggleMsDropdown('ms-container-pmu')">
+                                        <span id="ms-label-pmu">Tất cả đơn vị</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="ms-dropdown" style="display:none;">
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('pmu', true)">Chọn tất cả</button>
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('pmu', false)">Bỏ chọn</button>
+                                        </div>
+                                        <div class="ms-list" id="ms-list-pmu"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Filter: Area -->
+                            <div class="filter-col">
+                                <label>Tỉnh / Khu vực</label>
+                                <div class="ms-container" id="ms-container-area">
+                                    <button type="button" class="ms-button" onclick="app.toggleMsDropdown('ms-container-area')">
+                                        <span id="ms-label-area">Tất cả khu vực</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="ms-dropdown" style="display:none;">
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('area', true)">Chọn tất cả</button>
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('area', false)">Bỏ chọn</button>
+                                        </div>
+                                        <div class="ms-list" id="ms-list-area"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Filter: Status -->
+                            <div class="filter-col">
+                                <label>Hiện trạng</label>
+                                <div class="ms-container" id="ms-container-status">
+                                    <button type="button" class="ms-button" onclick="app.toggleMsDropdown('ms-container-status')">
+                                        <span id="ms-label-status">Tất cả hiện trạng</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="ms-dropdown" style="display:none;">
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('status', true)">Chọn tất cả</button>
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('status', false)">Bỏ chọn</button>
+                                        </div>
+                                        <div class="ms-list" id="ms-list-status"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Filter: Phase -->
+                            <div class="filter-col">
+                                <label>Giai đoạn</label>
+                                <div class="ms-container" id="ms-container-phase">
+                                    <button type="button" class="ms-button" onclick="app.toggleMsDropdown('ms-container-phase')">
+                                        <span id="ms-label-phase">Tất cả giai đoạn</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="ms-dropdown" style="display:none;">
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('phase', true)">Chọn tất cả</button>
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('phase', false)">Bỏ chọn</button>
+                                        </div>
+                                        <div class="ms-list" id="ms-list-phase"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Filter: Leader -->
+                            <div class="filter-col">
+                                <label>Cán bộ chủ trì</label>
+                                <div class="ms-container" id="ms-container-leader">
+                                    <button type="button" class="ms-button" onclick="app.toggleMsDropdown('ms-container-leader')">
+                                        <span id="ms-label-leader">Tất cả cán bộ</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="ms-dropdown" style="display:none;">
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('leader', true)">Chọn tất cả</button>
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('leader', false)">Bỏ chọn</button>
+                                        </div>
+                                        <div class="ms-list" id="ms-list-leader"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Filter: Category -->
+                            <div class="filter-col">
+                                <label>Phân loại dự án</label>
+                                <div class="ms-container" id="ms-container-category">
+                                    <button type="button" class="ms-button" onclick="app.toggleMsDropdown('ms-container-category')">
+                                        <span id="ms-label-category">Tất cả phân loại</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="ms-dropdown" style="display:none;">
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('category', true)">Chọn tất cả</button>
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('category', false)">Bỏ chọn</button>
+                                        </div>
+                                        <div class="ms-list" id="ms-list-category"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Filter: Group -->
+                            <div class="filter-col">
+                                <label>Nhóm dự án</label>
+                                <div class="ms-container" id="ms-container-group">
+                                    <button type="button" class="ms-button" onclick="app.toggleMsDropdown('ms-container-group')">
+                                        <span id="ms-label-group">Tất cả nhóm</span>
+                                        <i class="fa-solid fa-chevron-down"></i>
+                                    </button>
+                                    <div class="ms-dropdown" style="display:none;">
+                                        <div class="ms-actions">
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('group', true)">Chọn tất cả</button>
+                                            <button type="button" class="ms-action-btn" onclick="app.selectAllMs('group', false)">Bỏ chọn</button>
+                                        </div>
+                                        <div class="ms-list" id="ms-list-group">
+                                            <label class="ms-item"><input type="checkbox" value="Chậm tiến độ" onchange="app.onMsChange('group')"> Chậm tiến độ</label>
+                                            <label class="ms-item"><input type="checkbox" value="Sắp chậm tiến độ" onchange="app.onMsChange('group')"> Sắp chậm tiến độ</label>
+                                            <label class="ms-item"><input type="checkbox" value="Trọng điểm" onchange="app.onMsChange('group')"> Trọng điểm</label>
+                                            <label class="ms-item"><input type="checkbox" value="Khởi công/Đông điện 2026" onchange="app.onMsChange('group')"> Khởi công/Đóng điện 2026</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Reset Button -->
+                            <div class="filter-col flex-end">
+                                <button id="btn-clear-filters" class="btn btn-secondary w-full" onclick="app.resetAllMultiSelects()">
+                                    <i class="fa-solid fa-filter-circle-xmark"></i>
+                                    <span>Đặt lại</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PMU Summary Card (hidden by default) -->
+                    <div id="pmu-summary-container" class="data-card mt-4 mb-4" style="display: none;"></div>
+
+                    <!-- Search Results Info -->
+                    <div class="results-meta">
+                        <span>Đã tìm thấy: <strong id="search-result-count" class="text-cyan">0</strong> dự án</span>
+                    </div>
+
+                    <!-- Search Results Table -->
+                    <div class="data-card">
+                        <div class="table-responsive select-table">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>STT</th>
+                                        <th>Tên công trình</th>
+                                        <th>Giai đoạn</th>
+                                        <th>QLDA</th>
+                                        <th>Khu vực</th>
+                                        <th>Cấp ĐA</th>
+                                        <th>Hiện trạng</th>
+                                        <th>Cán bộ chủ trì</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="project-search-results">
+                                    <tr>
+                                        <td colspan="8" class="text-center">Vui lòng đợi hoặc nhập từ khóa để tìm kiếm...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Pagination -->
+                        <div class="pagination-panel">
+                            <button id="btn-prev-page" class="btn btn-secondary btn-sm" disabled>
+                                <i class="fa-solid fa-chevron-left"></i> Trang trước
+                            </button>
+                            <span id="pagination-info">Trang 1 / 1</span>
+                            <button id="btn-next-page" class="btn btn-secondary btn-sm" disabled>
+                                Trang sau <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Main Page Project Detail Card -->
+                    <div id="main-project-detail-card" class="data-card mt-4" style="display: none; padding: 24px; border: 1px solid var(--border-color); border-radius: var(--border-radius-lg); background: var(--bg-card);">
+                        <!-- Will be populated dynamically by app.js -->
+                    </div>
+                </section>
+
+                <!-- Tab: Delay Warnings -->
+                <section id="tab-alerts" class="tab-pane">
+                    <div class="alert-overview">
+                        <div class="alert-stat-card border-left-rose">
+                            <span class="label text-rose">Chậm tiến độ</span>
+                            <h2 id="alert-stat-delayed">0</h2>
+                            <p>Yêu cầu có giải pháp khắc phục gấp</p>
+                        </div>
+                        <div class="alert-stat-card border-left-amber">
+                            <span class="label text-amber">Sắp chậm tiến độ</span>
+                            <h2 id="alert-stat-near-delayed">0</h2>
+                            <p>Cần theo dõi sát để tránh bị quá hạn</p>
+                        </div>
+                    </div>
+
+                    <div class="filter-panel mt-4 mb-4">
+                        <div class="filter-row-selects" style="grid-template-columns: 1fr 1fr auto; align-items: end;">
+                            <div class="filter-col">
+                                <label for="alert-filter-pmu">Lọc theo Đơn vị QLDA</label>
+                                <select id="alert-filter-pmu">
+                                    <option value="all">Tất cả đơn vị</option>
+                                </select>
+                            </div>
+                            <div class="filter-col">
+                                <label for="alert-filter-severity">Lọc mức độ cảnh báo</label>
+                                <select id="alert-filter-severity">
+                                    <option value="all">Tất cả cảnh báo</option>
+                                    <option value="high">Chậm tiến độ (Đỏ)</option>
+                                    <option value="medium">Sắp chậm tiến độ (Vàng)</option>
+                                </select>
+                            </div>
+                            <div class="filter-col">
+                                <input type="text" id="alert-search-input" style="padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-color); width: 250px;" placeholder="Tìm nhanh dự án chậm trễ...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Delayed Projects Cards Stack -->
+                    <div id="delay-cards-container" class="delay-cards-stack">
+                        <div class="text-center p-8">Đang phân tích dữ liệu chậm trễ...</div>
+                    </div>
+                </section>
+
+                <!-- Tab: Revenue & Progress -->
+                <section id="tab-revenue" class="tab-pane">
+                    <!-- Financial KPIs -->
+                    <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-violet-opacity">
+                                <i class="fa-solid fa-bullseye text-violet"></i>
+                            </div>
+                            <div class="kpi-info" style="width: 100%;">
+                                <span class="kpi-label">Kế hoạch giao (NPC & NPSC)</span>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                                    <div>
+                                        <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">KH NPC giao</span>
+                                        <strong id="rev-kpi-npc-target" style="font-size: 1.1rem; color: var(--color-violet);">75 tỷ</strong>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">KH NPSC giao</span>
+                                        <strong id="rev-kpi-npsc-target" style="font-size: 1.1rem; color: var(--primary-color);">86 tỷ</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="kpi-card clickable-card" id="kpi-card-achieved" onclick="app.showCumulativeModal()" style="cursor: pointer; position: relative;" title="Bấm vào đây để xem chi tiết lũy kế tuần hiện tại/tuần trước & tháng này/tháng trước">
+                            <div class="kpi-icon bg-emerald-opacity">
+                                <i class="fa-solid fa-square-check text-emerald"></i>
+                            </div>
+                            <div class="kpi-info" style="width: 100%;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span class="kpi-label">Doanh thu đạt được lũy kế</span>
+                                    <span class="badge-tag-current" style="font-size: 0.65rem; padding: 2px 6px;"><i class="fa-solid fa-arrow-up-right-from-square"></i> Chi tiết</span>
+                                </div>
+                                <h3 id="rev-kpi-achieved" class="kpi-value">--</h3>
+                                <span class="kpi-trend text-emerald mb-2" style="display:block;">Tiến độ thực tế: đạt <span id="rev-kpi-pct">--</span>% kế hoạch</span>
+                                
+                                <div class="sub-kpi-box mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
+                                    <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span class="text-desc" id="rev-kpi-week-label" style="font-size:0.75rem;">Lũy kế tuần hiện tại:</span>
+                                        <strong id="rev-kpi-week-val" class="text-cyan">--</strong>
+                                    </div>
+                                    <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span class="text-desc" id="rev-kpi-month-label" style="font-size:0.75rem;">Lũy kế tháng hiện tại:</span>
+                                        <strong id="rev-kpi-month-val" class="text-emerald">--</strong>
+                                    </div>
+                                    <div style="font-size: 0.7rem; color: var(--color-cyan); text-align: center; margin-top: 2px; font-weight: 600;">
+                                        <i class="fa-solid fa-hand-pointer"></i> Nhấn để mở bảng lũy kế tuần/tháng trước & này
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-cyan-opacity">
+                                <i class="fa-solid fa-file-signature text-cyan"></i>
+                            </div>
+                            <div class="kpi-info" style="width: 100%;">
+                                <span class="kpi-label">Số lượng DA đã XHĐ</span>
+                                <h3 id="rev-kpi-invoiced-count" class="kpi-value">--</h3>
+                                <span class="kpi-trend text-cyan mb-2" style="display:block;">Ghi nhận doanh thu thực tế</span>
+
+                                <div class="sub-kpi-box mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
+                                    <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span class="text-desc" id="rev-kpi-week-count-label" style="font-size:0.75rem;">Số DA đã XHĐ tuần:</span>
+                                        <strong id="rev-kpi-week-count-val" class="text-cyan">--</strong>
+                                    </div>
+                                    <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span class="text-desc" id="rev-kpi-month-count-label" style="font-size:0.75rem;">Số DA đã XHĐ tháng:</span>
+                                        <strong id="rev-kpi-month-count-val" class="text-emerald">--</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="kpi-card">
+                            <div class="kpi-icon bg-blue-opacity">
+                                <i class="fa-solid fa-certificate text-blue"></i>
+                            </div>
+                            <div class="kpi-info" style="width: 100%;">
+                                <span class="kpi-label">Phê duyệt lũy kế năm 2026</span>
+                                <h3 id="rev-kpi-approved-total" class="kpi-value">--</h3>
+                                <span class="kpi-trend text-blue mb-2" style="display:block;">Dự án đã phê duyệt năm 2026</span>
+
+                                <div class="sub-kpi-box mt-2 pt-2" style="border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
+                                    <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span class="text-desc" id="rev-kpi-approved-week-label" style="font-size:0.75rem;">Phê duyệt lũy kế tuần:</span>
+                                        <strong id="rev-kpi-approved-week-val" class="text-cyan">--</strong>
+                                    </div>
+                                    <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span class="text-desc" id="rev-kpi-approved-month-label" style="font-size:0.75rem;">Phê duyệt lũy kế tháng:</span>
+                                        <strong id="rev-kpi-approved-month-val" class="text-emerald">--</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+
+                    <!-- Revenue charts -->
+                    <div class="charts-grid mt-4">
+                        <div class="chart-card card-full">
+                            <div class="card-header">
+                                <h3>Tổng hợp Doanh thu theo Tháng (Kế hoạch vs Thực tế)</h3>
+                                <p id="chart-monthly-rev-desc">Biểu đồ tổng hợp doanh thu thực tế theo tháng và lũy kế đối sánh Kế hoạch NPSC (86 tỷ đồng)</p>
+                            </div>
+                            <div class="chart-container-large">
+                                <canvas id="chart-monthly-revenue"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- New Charts for Revenue & Progress tab -->
+                    <div class="charts-grid mt-4">
+                        <div class="chart-card card-third">
+                            <div class="card-header">
+                                <h3>Tỷ lệ doanh thu lũy kế 2026</h3>
+                                <p>So sánh doanh thu thực tế đạt được so với Kế hoạch NPSC (86 tỷ)</p>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="chart-revenue-ratio"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card card-third">
+                            <div class="card-header">
+                                <h3>Tiến độ thực hiện QLA</h3>
+                                <p>Phân bổ dự án theo giai đoạn thực hiện (Trong hạn / Sắp trễ / Quá hạn)</p>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="chart-qla-progress"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card card-third">
+                            <div class="card-header">
+                                <h3>Hiện trạng HSNT dự án</h3>
+                                <p>Phân bổ dự án theo hiện trạng HSNT (Bấm vào cột để xem chi tiết danh sách dự án)</p>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="chart-hsntt-status"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Revenue list details -->
+                    <div class="data-card mt-4">
+                        <div class="card-header border-bottom">
+                            <h3>Chi tiết phân bổ doanh thu theo dự án</h3>
+                            <p>Danh sách các dự án nghiệm thu xuất hóa đơn ghi nhận doanh thu</p>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>STT</th>
+                                        <th>Tên công trình</th>
+                                        <th>Giai đoạn</th>
+                                        <th>QLDA</th>
+                                        <th>Khu vực</th>
+                                        <th>Năm giao A</th>
+                                        <th>TMĐT (triệu đồng)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="revenue-details-table">
+                                    <tr>
+                                        <td colspan="7" class="text-center">Đang tải bảng phân bổ doanh thu...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Weekly Report (Trích xuất trực tiếp Cột B -> I sheet "Báo cáo") -->
+                <section id="tab-weekly-report" class="tab-pane">
+                    <div class="report-layout">
+                        <!-- Action & Info Toolbar -->
+                        <div class="filter-panel mb-4" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 20px;">
+                            <div>
+                                <h3 style="margin: 0 0 4px 0; font-size: 1.15rem; font-weight: 700; color: var(--text-primary);">
+                                    <i class="fa-solid fa-file-lines text-cyan mr-2"></i> Báo cáo tổng hợp tiến độ
+                                </h3>
+                                <p style="margin: 0; font-size: 0.85rem; color: var(--text-secondary);">
+                                    Báo cáo tổng hợp tiến độ tự động cập nhật
+                                </p>
+                            </div>
+                            <div class="flex-gap" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <button id="btn-sync-report" class="btn btn-primary btn-sm" onclick="app.syncData(true)">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Cập nhật Google Sheets
+                                </button>
+                                <button id="btn-copy-report" class="btn btn-secondary btn-sm" onclick="app.copyWeeklyReport()">
+                                    <i class="fa-regular fa-copy"></i> Sao chép báo cáo
+                                </button>
+                                <button id="btn-export-word" class="btn btn-emerald btn-sm" onclick="app.exportWeeklyReportWord()">
+                                    <i class="fa-solid fa-file-word"></i> Xuất file Word (.docx)
+                                </button>
+                                <button id="btn-download-report" class="btn btn-secondary btn-sm" onclick="app.downloadWeeklyReportTxt()">
+                                    <i class="fa-solid fa-download"></i> Tải file .txt
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Report display card -->
+                        <div class="data-card">
+                            <div class="report-content-wrapper" style="padding: 24px; background: rgba(0,0,0,0.15); border-radius: var(--border-radius-lg);">
+                                <div id="report-html-output" class="weekly-report-content" style="font-family: 'Times New Roman', Times, serif !important; font-size: 13pt !important; line-height: 1.6;">
+                                    Đang tải dữ liệu báo cáo...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: AI Chat Assistant -->
+                <section id="tab-ai-chat" class="tab-pane">
+                    <div class="ai-chat-layout">
+                        <!-- Left Panel: Chat settings & presets -->
+                        <div class="chat-sidebar">
+                            <div class="settings-card">
+                                <h4><i class="fa-solid fa-key"></i> Google Gemini API Key</h4>
+                                <p class="text-muted">Nhập khóa API Key của bạn để trò chuyện và hỏi đáp chuyên sâu về toàn bộ cơ sở dữ liệu dự án.</p>
+                                <div class="form-group mt-2">
+                                    <label for="api-model-select" style="font-size:0.7rem; color:var(--text-desc); margin-bottom:2px; display:block;">Mô hình Gemini</label>
+                                    <select id="api-model-select" style="width:100%; padding:8px; margin-bottom:10px; border-radius:var(--border-radius-sm); border:1px solid var(--border-color); background:rgba(0,0,0,0.25); color:var(--text-color); font-size:0.8rem; outline:none; cursor:pointer;">
+                                        <option value="gemini-2.5-flash" selected>gemini-2.5-flash (Mới nhất — Nhanh, Đề xuất)</option>
+                                        <option value="gemini-2.5-pro">gemini-2.5-pro (Mới nhất — Chất lượng cao, Suy luận sâu)</option>
+                                        <option value="gemini-2.0-flash">gemini-2.0-flash (Tốc độ cao, Ổn định)</option>
+                                        <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Siêu nhẹ, Tiết kiệm Quota)</option>
+                                    </select>
+                                    <div class="input-with-button">
+                                        <input type="password" id="api-key-input" placeholder="AIzaSy...">
+                                        <button id="btn-toggle-key-visibility" class="btn btn-secondary btn-icon-only">
+                                            <i class="fa-solid fa-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="mt-2 flex-gap">
+                                        <button id="btn-save-key" class="btn btn-primary btn-sm">Lưu Key</button>
+                                        <button id="btn-clear-key" class="btn btn-secondary btn-sm">Xóa Key</button>
+                                    </div>
+                                </div>
+                                <div class="api-help-links mt-2">
+                                    <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Lấy API Key miễn phí tại Google AI Studio
+                                    </a>
+                                </div>
+                                <div id="api-status-badge" class="api-status-label status-key-missing">
+                                    <i class="fa-solid fa-circle-info"></i> Chưa có API Key (Đang dùng công cụ tìm kiếm cục bộ)
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Conversation Interface -->
+                        <div class="chat-workspace">
+                            <div id="chat-messages-container" class="chat-messages-area">
+                                <div class="message system-msg">
+                                    <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+                                    <div class="bubble">
+                                        <p>Xin chào! Tôi là Trợ lý AI của hệ thống <strong>TVTK 110kV NPSC</strong>. Tôi có thể giúp bạn tra cứu, tìm kiếm bất kỳ thông tin nào liên quan đến các dự án điện trong cơ sở dữ liệu của bạn.</p>
+                                        <p class="text-important"><i class="fa-solid fa-circle-exclamation"></i> <strong>Lưu ý:</strong> Hãy cấu hình API Key của Google Gemini ở khung bên trái để kích hoạt khả năng trò chuyện thông minh bằng ngôn ngữ tự nhiên. Nếu không có Key, tôi sẽ sử dụng bộ máy tìm kiếm cục bộ để lọc thông tin dự án cho bạn.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="chat-input-area">
+                                <textarea id="chat-input-box" placeholder="Nhập câu hỏi của bạn về dự án ở đây... (Nhấn Enter để gửi, Shift+Enter để xuống dòng)"></textarea>
+                                <button id="btn-send-message" class="btn btn-primary">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                    <span>Gửi</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+
+        <!-- Project Detail Drawer/Modal -->
+        <div id="project-detail-drawer" class="drawer">
+            <div class="drawer-overlay"></div>
+            <div class="drawer-content">
+                <div class="drawer-header">
+                    <h3>Chi tiết dự án</h3>
+                    <button class="btn-close-drawer"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="drawer-body" id="project-detail-body">
+                    <!-- Project info will be dynamically rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal (API Key configuration popup on mobile/sidebar click) -->
+        <div id="settings-modal" class="modal">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Cấu hình hệ thống</h3>
+                    <button class="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="modal-sheet-url">Đồng bộ từ Google Sheets Link (Mặc định)</label>
+                        <input type="text" id="modal-sheet-url" style="width:100%; padding:10px; margin-top:5px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:var(--text-color);" value="https://docs.google.com/spreadsheets/d/1UMIJC0fAFuNfAARb6fyUETrD7nOV7whfHokbNa35Y2w/edit?gid=781695564#gid=781695564">
+                        <p class="text-muted mt-1" style="font-size:0.8rem;">Dữ liệu sẽ được đồng bộ động trực tiếp từ Google Sheet này mỗi khi trang tải hoặc khi bấm nút đồng bộ.</p>
+                    </div>
+                    <div class="form-group mt-3">
+                        <label for="modal-api-model">Mô hình Gemini</label>
+                        <select id="modal-api-model" style="width:100%; padding:10px; margin-top:5px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:var(--text-color);">
+                            <option value="gemini-2.5-flash" selected>gemini-2.5-flash (Mới nhất — Nhanh, Đề xuất)</option>
+                            <option value="gemini-2.5-pro">gemini-2.5-pro (Mới nhất — Chất lượng cao, Suy luận sâu)</option>
+                            <option value="gemini-2.0-flash">gemini-2.0-flash (Tốc độ cao, Ổn định)</option>
+                            <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Siêu nhẹ, Tiết kiệm Quota)</option>
+                        </select>
+                    </div>
+                    <div class="form-group mt-3">
+                        <label for="modal-api-key">Google Gemini API Key</label>
+                        <input type="password" id="modal-api-key" style="width:100%; padding:10px; margin-top:5px; border-radius:6px; border:1px solid var(--border-color); background:var(--bg-main); color:var(--text-color);" placeholder="Nhập API Key ở đây...">
+                    </div>
+                    <div class="mt-3 flex-gap flex-end">
+                        <button id="btn-modal-cancel" class="btn btn-secondary">Đóng</button>
+                        <button id="btn-modal-save" class="btn btn-primary">Lưu cấu hình</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Chi Tiết Lũy Kế Doanh Thu & Tiến Độ -->
+        <div id="modal-cumulative-details" class="modal">
+            <div class="modal-overlay" onclick="app.closeCumulativeModal()"></div>
+            <div class="modal-content" style="max-width: 650px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card); padding: 24px;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 style="margin: 0; font-size: 1.15rem; color: var(--color-emerald); display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-square-check"></i>
+                        Chi Tiết Lũy Kế Doanh Thu & Tiến Độ
+                    </h3>
+                    <button class="btn-close-modal" onclick="app.closeCumulativeModal()" style="background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+                    <!-- 1. Lũy Kế Tuần -->
+                    <div class="cumulative-card" style="background: rgba(255,255,255,0.02); border-radius: 8px; padding: 12px;">
+                        <div class="cumulative-card-header" style="margin-bottom: 8px;">
+                            <div class="kpi-icon bg-cyan-opacity" style="width:32px; height:32px; min-width:32px; font-size:0.85rem;">
+                                <i class="fa-solid fa-calendar-week text-cyan"></i>
+                            </div>
+                            <div>
+                                <span class="kpi-label" style="font-weight:700; color:var(--color-cyan);">LŨY KẾ TUẦN</span>
+                                <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Dữ liệu tuần hiện tại và các tuần trước</span>
+                            </div>
+                        </div>
+                        <div id="modal-cumulative-week-list" class="cumulative-list-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- 2. Lũy Kế Tháng -->
+                    <div class="cumulative-card" style="background: rgba(255,255,255,0.02); border-radius: 8px; padding: 12px;">
+                        <div class="cumulative-card-header" style="margin-bottom: 8px;">
+                            <div class="kpi-icon bg-purple-opacity" style="width:32px; height:32px; min-width:32px; font-size:0.85rem;">
+                                <i class="fa-solid fa-calendar-days text-purple"></i>
+                            </div>
+                            <div>
+                                <span class="kpi-label" style="font-weight:700; color:var(--primary-color);">LŨY KẾ THÁNG</span>
+                                <span style="font-size:0.7rem; color:var(--text-muted); display:block;">Dữ liệu tháng hiện tại và các tháng trước</span>
+                            </div>
+                        </div>
+                        <div id="modal-cumulative-month-list" class="cumulative-list-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer mt-4 text-right" style="border-top: 1px solid var(--border-color); padding-top: 12px; text-align: right;">
+                    <button onclick="app.closeCumulativeModal()" class="btn btn-secondary btn-sm">Đóng</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Chi Tiết Hiện Trạng HSNT Dự Án -->
+        <div id="modal-hsnt-detail" class="modal">
+            <div class="modal-overlay" onclick="app.closeHsntDetailModal()"></div>
+            <div class="modal-content" style="max-width: 800px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-card-solid); padding: 24px;">
+                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 16px;">
+                    <h3 id="modal-hsnt-title" style="margin: 0; font-size: 1.1rem; color: var(--color-cyan); display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-list-check"></i>
+                        Chi Tiết Dự Án Theo Hiện Trạng HSNT
+                    </h3>
+                    <button class="btn-close-modal" onclick="app.closeHsntDetailModal()" style="background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 12px;">
+                        <input type="text" id="hsnt-modal-search" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-color); background:rgba(0,0,0,0.3); color:var(--text-color); font-size:0.85rem;" placeholder="Tìm kiếm nhanh tên dự án, QLDA..." oninput="app.filterHsntModalList()">
+                    </div>
+                    <div class="table-responsive select-table" style="max-height: 400px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px;">STT</th>
+                                    <th>Tên công trình</th>
+                                    <th>QLDA</th>
+                                    <th>Hiện trạng xuất HĐ</th>
+                                    <th>Hiện trạng HSNT</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal-hsnt-tbody">
+                                <!-- Dynamic rendering -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer mt-4 text-right" style="border-top: 1px solid var(--border-color); padding-top: 12px; text-align: right;">
+                    <button onclick="app.closeHsntDetailModal()" class="btn btn-secondary btn-sm">Đóng</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Data & Application Scripts -->
+    <script src="data/data.js"></script>
+    <script src="chat-helper.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
